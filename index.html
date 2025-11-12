@@ -2,7 +2,7 @@
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
-<title>ыыыы</title>
+<title>3D Sphere and Cube</title>
 <style>
 body{margin:0;overflow:hidden;background:black}
 canvas{display:block}
@@ -12,81 +12,91 @@ canvas{display:block}
 <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/examples/js/controls/OrbitControls.js"></script>
 <script>
-const scene=new THREE.Scene()
-const camera=new THREE.PerspectiveCamera(75,innerWidth/innerHeight,0.1,1000)
-const renderer=new THREE.WebGLRenderer({antialias:true})
+let scene=new THREE.Scene()
+let camera=new THREE.PerspectiveCamera(75,innerWidth/innerHeight,0.1,1000)
+let renderer=new THREE.WebGLRenderer({antialias:true})
 renderer.setSize(innerWidth,innerHeight)
 document.body.appendChild(renderer.domElement)
 
-const controls=new THREE.OrbitControls(camera,renderer.domElement)
-controls.enablePan=false
+let controls=new THREE.OrbitControls(camera,renderer.domElement)
 controls.enableDamping=true
-controls.dampingFactor=0.1
-controls.rotateSpeed=0.5
-controls.zoomSpeed=1
+controls.enablePan=false
 
-const sphereGeom=new THREE.SphereGeometry(1.5,32,32)
-const sphereMat=new THREE.MeshStandardMaterial({color:0x00ff00})
-const sphere=new THREE.Mesh(sphereGeom,sphereMat)
+let light=new THREE.PointLight(0xffffff,2)
+light.position.set(5,5,5)
+scene.add(light)
+scene.add(new THREE.AmbientLight(0x202020))
+
+let sphere=new THREE.Mesh(
+ new THREE.SphereGeometry(1.5,32,32),
+ new THREE.MeshStandardMaterial({color:0x00ff00})
+)
 scene.add(sphere)
 
-const cubeGeom=new THREE.BoxGeometry(0.5,0.5,0.5)
-const cubeMat=new THREE.MeshStandardMaterial({color:0xffffff})
-const cube=new THREE.Mesh(cubeGeom,cubeMat)
+let cube=new THREE.Mesh(
+ new THREE.BoxGeometry(0.5,0.5,0.5),
+ new THREE.MeshStandardMaterial({color:0xffffff})
+)
 cube.position.set(3,0,0)
 scene.add(cube)
 
-const light=new THREE.PointLight(0xffffff,1)
-light.position.set(5,5,5)
-scene.add(light)
-scene.add(new THREE.AmbientLight(0x404040))
-
-camera.position.set(0,2,5)
+camera.position.set(0,2,6)
 
 let keys={}
-addEventListener('keydown',e=>keys[e.key.toLowerCase()]=true)
-addEventListener('keyup',e=>keys[e.key.toLowerCase()]=false)
+onkeydown=e=>keys[e.key.toLowerCase()]=true
+onkeyup=e=>keys[e.key.toLowerCase()]=false
 
-let raycaster=new THREE.Raycaster(),mouse=new THREE.Vector2(),dragging=false,offset=new THREE.Vector3()
-addEventListener('mousedown',e=>{
-mouse.x=(e.clientX/innerWidth)*2-1
-mouse.y=-(e.clientY/innerHeight)*2+1
-raycaster.setFromCamera(mouse,camera)
-let intersects=raycaster.intersectObject(cube)
-if(intersects.length>0){dragging=true;offset.copy(intersects[0].point).sub(cube.position)}
-})
-addEventListener('mouseup',()=>dragging=false)
-addEventListener('mousemove',e=>{
-if(dragging){
-mouse.x=(e.clientX/innerWidth)*2-1
-mouse.y=-(e.clientY/innerHeight)*2+1
-raycaster.setFromCamera(mouse,camera)
-let plane=new THREE.Plane(new THREE.Vector3(0,0,1),0)
-let point=new THREE.Vector3()
-raycaster.ray.intersectPlane(plane,point)
-cube.position.copy(point.sub(offset))
-}})
+let raycaster=new THREE.Raycaster(),mouse=new THREE.Vector2()
+let dragging=false,dragOffset=new THREE.Vector3()
+
+onmousedown=e=>{
+ mouse.x=(e.clientX/innerWidth)*2-1
+ mouse.y=-(e.clientY/innerHeight)*2+1
+ raycaster.setFromCamera(mouse,camera)
+ let hit=raycaster.intersectObject(cube)
+ if(hit.length>0){dragging=true;dragOffset.copy(hit[0].point).sub(cube.position)}
+}
+onmouseup=()=>dragging=false
+onmousemove=e=>{
+ if(!dragging)return
+ mouse.x=(e.clientX/innerWidth)*2-1
+ mouse.y=-(e.clientY/innerHeight)*2+1
+ raycaster.setFromCamera(mouse,camera)
+ let plane=new THREE.Plane(new THREE.Vector3(0,0,1),0)
+ let p=new THREE.Vector3()
+ raycaster.ray.intersectPlane(plane,p)
+ cube.position.copy(p.sub(dragOffset))
+}
+
+function moveCamera(){
+ let forward=new THREE.Vector3()
+ camera.getWorldDirection(forward)
+ let right=new THREE.Vector3().crossVectors(forward,camera.up).normalize()
+ if(keys['w'])camera.position.addScaledVector(forward,0.1)
+ if(keys['s'])camera.position.addScaledVector(forward,-0.1)
+ if(keys['a'])camera.position.addScaledVector(right,-0.1)
+ if(keys['d'])camera.position.addScaledVector(right,0.1)
+}
 
 function animate(){
-requestAnimationFrame(animate)
-sphere.rotation.y+=0.01
-let dir=new THREE.Vector3().subVectors(sphere.position,cube.position)
-let dist=dir.length()
-if(!dragging && dist>1.5){dir.normalize().multiplyScalar(0.02);cube.position.add(dir)}
-if(keys['w'])camera.position.add(controls.target.clone().sub(camera.position).normalize().multiplyScalar(0.1))
-if(keys['s'])camera.position.add(camera.position.clone().sub(controls.target).normalize().multiplyScalar(0.1))
-if(keys['a'])camera.position.add(new THREE.Vector3().crossVectors(camera.up,controls.target.clone().sub(camera.position)).normalize().multiplyScalar(0.1))
-if(keys['d'])camera.position.add(new THREE.Vector3().crossVectors(controls.target.clone().sub(camera.position),camera.up).normalize().multiplyScalar(0.1))
-controls.update()
-renderer.render(scene,camera)
+ requestAnimationFrame(animate)
+ sphere.rotation.y+=0.01
+ if(!dragging){
+  let dir=new THREE.Vector3().subVectors(sphere.position,cube.position)
+  let d=dir.length()
+  if(d>1.5){dir.normalize().multiplyScalar(0.02);cube.position.add(dir)}
+ }
+ moveCamera()
+ controls.update()
+ renderer.render(scene,camera)
 }
 animate()
 
-addEventListener('resize',()=>{
-camera.aspect=innerWidth/innerHeight
-camera.updateProjectionMatrix()
-renderer.setSize(innerWidth,innerHeight)
-})
+onresize=()=>{
+ camera.aspect=innerWidth/innerHeight
+ camera.updateProjectionMatrix()
+ renderer.setSize(innerWidth,innerHeight)
+}
 </script>
 </body>
 </html>
