@@ -39,6 +39,9 @@
     light.position.set(2, 2, 2).normalize();
     scene.add(light);
 
+    const ambient = new THREE.AmbientLight(0xffffff, 0.4);
+    scene.add(ambient);
+
     const loader = new THREE.OBJLoader();
     loader.load('model5.obj', (obj) => {
       obj.scale.set(1, 1, 1);
