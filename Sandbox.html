@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Sandbox</title>
+  <style>
+    body {
+      background: #1e1e1e;
+      color: #f5f5f5;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      margin: 20px;
+      gap: 10px;
+    }
+    h2 { margin: 0 0 8px; }
+    #canvas {
+      background: #000;
+      image-rendering: pixelated;
+      border: 2px solid #555;
+      cursor: crosshair;
+    }
+    .ui {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-top: 10px;
+      padding: 10px 14px;
+      border-radius: 10px;
+      background: #2b2b2b;
+      border: 1px solid #444;
+      min-width: 320px;
+    }
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+    button.tool {
+      padding: 6px 10px;
+      font-size: 13px;
+      cursor: pointer;
+      border-radius: 8px;
+      border: 1px solid #555;
+      background: #333;
+      color: #eee;
+    }
+    button.tool.active {
+      border-color: #ffd54f;
+      box-shadow: 0 0 4px rgba(255, 213, 79, 0.8);
+    }
+    .controls-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      font-size: 13px;
+    }
+    .brush-control {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex: 1;
+    }
+    input[type="range"] { flex: 1; }
+    .secondary-btn {
+      padding: 6px 10px;
+      font-size: 13px;
+      cursor: pointer;
+      border-radius: 8px;
+      border: 1px solid #666;
+      background: #444;
+      color: #eee;
+    }
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      font-size: 11px;
+      opacity: 0.8;
+    }
+    .legend-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .legend-color {
+      width: 12px;
+      height: 12px;
+      border-radius: 3px;
+      border: 1px solid #000;
+    }
+  </style>
+</head>
+<body>
+  <h2>Sandbox</h2>
+  <canvas id="canvas" width="300" height="300"></canvas>
+
+  <div class="ui">
+    <div class="toolbar" id="toolbar">
+      <button class="tool" data-tool="1">Sand</button>
+      <button class="tool" data-tool="2">Wall</button>
+      <button class="tool" data-tool="3">Water</button>
+      <button class="tool" data-tool="4">Lava</button>
+      <button class="tool" data-tool="5">Rock</button>
+      <button class="tool" data-tool="0">Eraser</button>
+      <button class="tool" data-tool="6">Fire</button>
+      <button class="tool" data-tool="7">Seed</button>
+      <button class="tool" data-tool="8">Plant</button>
+      <button class="tool" data-tool="9">Bomb</button>
+    </div>
+
+    <div class="controls-row">
+      <div class="brush-control">
+        <span>Brush:</span>
+        <input type="range" id="brushSize" min="1" max="8" value="2" />
+        <span id="brushLabel">2</span>
+      </div>
+      <button class="secondary-btn" id="clearBtn">Clear</button>
+    </div>
+
+    <div class="legend">
+      <div class="legend-item"><span class="legend-color" style="background:#f4d03f"></span>Sand</div>
+      <div class="legend-item"><span class="legend-color" style="background:#95a5a6"></span>Wall</div>
+      <div class="legend-item"><span class="legend-color" style="background:#3498db"></span>Water</div>
+      <div class="legend-item"><span class="legend-color" style="background:#e67e22"></span>Lava</div>
+      <div class="legend-item"><span class="legend-color" style="background:#7f8c8d"></span>Rock</div>
+      <div class="legend-item"><span class="legend-color" style="background:#ff7043"></span>Fire</div>
+      <div class="legend-item"><span class="legend-color" style="background:#8e5b3c"></span>Seed</div>
+      <div class="legend-item"><span class="legend-color" style="background:#2ecc71"></span>Plant</div>
+      <div class="legend-item"><span class="legend-color" style="background:#2c3e50"></span>Bomb</div>
+    </div>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+
+    const W = 100;
+    const H = 100;
+    const PIX = 3;
+
+    let grid = Array.from({ length: H }, () => Array(W).fill(0));
+
+    let currentTool = 1;
+    let brushSize = 2;
+
+    const toolbar = document.getElementById('toolbar');
+    const toolButtons = Array.from(toolbar.querySelectorAll('.tool'));
+
+    function setTool(toolId) {
+      currentTool = Number(toolId);
+      toolButtons.forEach(btn => {
+        btn.classList.toggle('active', Number(btn.dataset.tool) === currentTool);
+      });
+    }
+
+    toolbar.addEventListener('click', (e) => {
+      const btn = e.target.closest('.tool');
+      if (!btn) return;
+      setTool(btn.dataset.tool);
+    });
+
+    setTool(1);
+
+    const brushInput = document.getElementById('brushSize');
+    const brushLabel = document.getElementById('brushLabel');
+
+    brushInput.addEventListener('input', () => {
+      brushSize = Number(brushInput.value);
+      brushLabel.textContent = brushSize;
+    });
+
+    document.getElementById('clearBtn').addEventListener('click', () => {
+      grid = Array.from({ length: H }, () => Array(W).fill(0));
+    });
+
+    let drawing = false;
+
+    canvas.addEventListener('mousedown', () => { drawing = true; });
+    canvas.addEventListener('mouseup', () => { drawing = false; });
+    canvas.addEventListener('mouseleave', () => { drawing = false; });
+
+    canvas.addEventListener('mousemove', (e) => {
+      if (!drawing) return;
+      paintAtEvent(e);
+    });
+
+    canvas.addEventListener('mousedown', (e) => {
+      paintAtEvent(e);
+    });
+
+    function paintAtEvent(e) {
+      const rect = canvas.getBoundingClientRect();
+      const cx = Math.floor((e.clientX - rect.left) / PIX);
+      const cy = Math.floor((e.clientY - rect.top) / PIX);
+
+      const r = brushSize - 1;
+      for (let dy = -r; dy <= r; dy++) {
+        for (let dx = -r; dx <= r; dx++) {
+          const x = cx + dx;
+          const y = cy + dy;
+          if (x < 0 || x >= W || y < 0 || y >= H) continue;
+          grid[y][x] = currentTool === 0 ? 0 : currentTool;
+        }
+      }
+    }
+
+    function inBounds(x, y) {
+      return x >= 0 && x < W && y >= 0 && y < H;
+    }
+
+    function explodeAt(cx, cy) {
+      const radius = 5;
+      const r2 = radius * radius;
+      const innerR2 = r2 / 4;
+
+      for (let dy = -radius; dy <= radius; dy++) {
+        for (let dx = -radius; dx <= radius; dx++) {
+          const x = cx + dx;
+          const y = cy + dy;
+          if (!inBounds(x, y)) continue;
+          const d2 = dx * dx + dy * dy;
+          if (d2 > r2) continue;
+
+          if (d2 < innerR2) {
+            grid[y][x] = 0;
+          } else {
+            grid[y][x] = Math.random() < 0.4 ? 6 : 0;
+          }
+        }
+      }
+    }
+
+    function physicsStep() {
+      for (let y = H - 1; y >= 0; y--) {
+        for (let x = 0; x < W; x++) {
+          const cell = grid[y][x];
+          if (cell === 0 || cell === 2 || cell === 5) continue;
+
+          if (y === H - 1 && (cell === 1 || cell === 3 || cell === 4 || cell === 7)) continue;
+
+          if (cell === 1) {
+            const below = grid[y + 1][x];
+            if (below === 0 || below === 3) {
+              grid[y + 1][x] = 1;
+              grid[y][x] = below === 3 ? 3 : 0;
+            } else {
+              const dir = Math.random() < 0.5 ? -1 : 1;
+              const nx = x + dir;
+              if (inBounds(nx, y + 1)) {
+                const diag = grid[y + 1][nx];
+                if (diag === 0 || diag === 3) {
+                  grid[y + 1][nx] = 1;
+                  grid[y][x] = diag === 3 ? 3 : 0;
+                }
+              }
+            }
+          } else if (cell === 3) {
+            if (grid[y + 1][x] === 0) {
+              grid[y + 1][x] = 3;
+              grid[y][x] = 0;
+            } else {
+              let dir = Math.random() < 0.5 ? -1 : 1;
+              let nx = x + dir;
+              if (inBounds(nx, y + 1) && grid[y + 1][nx] === 0) {
+                grid[y + 1][nx] = 3;
+                grid[y][x] = 0;
+              } else {
+                dir = Math.random() < 0.5 ? -1 : 1;
+                nx = x + dir;
+                if (inBounds(nx, y) && grid[y][nx] === 0) {
+                  grid[y][nx] = 3;
+                  grid[y][x] = 0;
+                }
+              }
+            }
+          } else if (cell === 4) {
+            if (Math.random() < 0.4) continue;
+
+            const neighbors = [
+              [x + 1, y], [x - 1, y],
+              [x, y + 1], [x, y - 1]
+            ];
+            let reacted = false;
+            for (const [nx, ny] of neighbors) {
+              if (!inBounds(nx, ny)) continue;
+              if (grid[ny][nx] === 3) {
+                grid[ny][nx] = 5;
+                grid[y][x] = 5;
+                reacted = true;
+              }
+            }
+            if (reacted) continue;
+
+            if (grid[y + 1][x] === 0) {
+              grid[y + 1][x] = 4;
+              grid[y][x] = 0;
+            } else {
+              let dir = Math.random() < 0.5 ? -1 : 1;
+              let nx = x + dir;
+              if (inBounds(nx, y + 1) && grid[y + 1][nx] === 0) {
+                grid[y + 1][nx] = 4;
+                grid[y][x] = 0;
+              } else {
+                dir = Math.random() < 0.5 ? -1 : 1;
+                nx = x + dir;
+                if (inBounds(nx, y) && grid[y][nx] === 0) {
+                  grid[y][nx] = 4;
+                  grid[y][x] = 0;
+                }
+              }
+            }
+          } else if (cell === 7) {
+            const below = grid[y + 1][x];
+            if (below === 0 || below === 3) {
+              grid[y + 1][x] = 7;
+              grid[y][x] = 0;
+            } else {
+              const dir = Math.random() < 0.5 ? -1 : 1;
+              const nx = x + dir;
+              if (inBounds(nx, y + 1) && (grid[y + 1][nx] === 0 || grid[y + 1][nx] === 3)) {
+                grid[y + 1][nx] = 7;
+                grid[y][x] = 0;
+              } else {
+                const neigh = [
+                  [x, y + 1],
+                  [x + 1, y],
+                  [x - 1, y]
+                ];
+                let nearWater = false;
+                for (const [sx, sy] of neigh) {
+                  if (!inBounds(sx, sy)) continue;
+                  if (grid[sy][sx] === 3) nearWater = true;
+                }
+                if (nearWater && Math.random() < 0.05) grid[y][x] = 8;
+              }
+            }
+          } else if (cell === 8) {
+            const neighbors = [
+              [x + 1, y], [x - 1, y],
+              [x, y + 1], [x, y - 1]
+            ];
+            let burning = false;
+            for (const [nx, ny] of neighbors) {
+              if (!inBounds(nx, ny)) continue;
+              const ncell = grid[ny][nx];
+              if (ncell === 6 || ncell === 4) burning = true;
+            }
+            if (burning && Math.random() < 0.6) {
+              grid[y][x] = 6;
+              continue;
+            }
+
+            if (y > 0 && grid[y - 1][x] === 0) {
+              let hasWaterBelow = false;
+              for (let dy = 0; dy <= 3; dy++) {
+                const ny = y + dy;
+                if (!inBounds(x, ny)) break;
+                if (grid[ny][x] === 3) hasWaterBelow = true;
+              }
+              if (hasWaterBelow && Math.random() < 0.01) grid[y - 1][x] = 8;
+            }
+          } else if (cell === 6) {
+            const neighbors = [
+              [x + 1, y], [x - 1, y],
+              [x, y + 1], [x, y - 1]
+            ];
+            for (const [nx, ny] of neighbors) {
+              if (!inBounds(nx, ny)) continue;
+              const target = grid[ny][nx];
+              if (target === 7 || target === 8) grid[ny][nx] = 6;
+            }
+
+            if (Math.random() < 0.02) {
+              grid[y][x] = 0;
+              continue;
+            }
+
+            if (y > 0 && grid[y - 1][x] === 0 && Math.random() < 0.3) {
+              grid[y - 1][x] = 6;
+              grid[y][x] = 0;
+              continue;
+            }
+
+            const dir = Math.random() < 0.5 ? -1 : 1;
+            const nx = x + dir;
+            if (inBounds(nx, y) && grid[y][nx] === 0 && Math.random() < 0.3) {
+              grid[y][nx] = 6;
+              grid[y][x] = 0;
+              continue;
+            }
+          } else if (cell === 9) {
+            const neighbors = [
+              [x + 1, y], [x - 1, y],
+              [x, y + 1], [x, y - 1]
+            ];
+            let shouldExplode = false;
+            for (const [nx, ny] of neighbors) {
+              if (!inBounds(nx, ny)) continue;
+              const ncell = grid[ny][nx];
+              if (ncell === 4 || ncell === 6) shouldExplode = true;
+            }
+            if (shouldExplode) explodeAt(x, y);
+          }
+        }
+      }
+    }
+
+    function draw() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      for (let y = 0; y < H; y++) {
+        for (let x = 0; x < W; x++) {
+          const cell = grid[y][x];
+          if (cell === 0) continue;
+          if (cell === 1) ctx.fillStyle = '#f4d03f';
+          else if (cell === 2) ctx.fillStyle = '#95a5a6';
+          else if (cell === 3) ctx.fillStyle = '#3498db';
+          else if (cell === 4) ctx.fillStyle = '#e67e22';
+          else if (cell === 5) ctx.fillStyle = '#7f8c8d';
+          else if (cell === 6) ctx.fillStyle = '#ff7043';
+          else if (cell === 7) ctx.fillStyle = '#8e5b3c';
+          else if (cell === 8) ctx.fillStyle = '#2ecc71';
+          else if (cell === 9) ctx.fillStyle = '#2c3e50';
+
+          ctx.fillRect(x * PIX, y * PIX, PIX, PIX);
+        }
+      }
+    }
+
+    function loop() {
+      physicsStep();
+      draw();
+      requestAnimationFrame(loop);
+    }
+
+    loop();
+  </script>
+</body>
+</html>
