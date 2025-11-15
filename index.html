@@ -27,7 +27,7 @@
   let objModel;
   const loader = new THREE.OBJLoader();
 
-  loader.load('model3.obj', function(object) {
+  loader.load('model4.obj', function(object) {
 
     const box = new THREE.Box3().setFromObject(object);
     const center = box.getCenter(new THREE.Vector3());
@@ -40,7 +40,7 @@
 
     objModel = object;
     scene.add(objModel);
-  }, undefined, function(err) { console.error(err); });('model3.obj', function(object) {
+  }, undefined, function(err) { console.error(err); });('model4.obj', function(object) {
     objModel = object;
     scene.add(objModel);
   });
